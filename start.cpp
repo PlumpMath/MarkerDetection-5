@@ -5,6 +5,9 @@
 #include <sstream>
 #include <stdlib.h>
 
+//read me https://code.ros.org/trac/opencv/browser/trunk/opencv/modules/imgproc/src/hough.cpp?rev=3934
+//and me http://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.59.4239&rep=rep1&type=pdf
+
 using namespace cv;
 using namespace std;
 
