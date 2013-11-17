@@ -3,20 +3,20 @@
 #include <string.h>
 #include <cstdlib>
 #include <sstream>
+#include <stdlib.h>
 
 using namespace cv;
 using namespace std;
 
 void on_trackbar( int, void* );
-void drawCorners(Mat dst, vector<Point2f> corners);
-vector<Point2f> removeUselessCorners(vector<Point2f> corners, int sizeOfCornerMin, int sizeOfCornerMax);
-vector<Vec4i> findParallelLines(std::vector<cv::Vec4i> lines, int max, int min);
+vector<Vec2f> detectRectanglePatterns(std::vector<cv::Vec2f> lines, double Tq, double Tp, double Tl);
 Mat contours;
 Mat img;
-const int canny= 4*255;
+Mat gray;
+const int canny= 5*255;
 int cannyMin = 0;
 int cannyMax = 0;
-
+Mat dd;
 cv::Point2f computeIntersect(cv::Vec4i a, cv::Vec4i b)
 {
 	int x1 = a[0], y1 = a[1], x2 = a[2], y2 = a[3], x3 = b[0], y3 = b[1], x4 = b[2], y4 = b[3];
@@ -33,139 +33,201 @@ cv::Point2f computeIntersect(cv::Vec4i a, cv::Vec4i b)
 		return cv::Point2f(-1, -1);
 }
 
-
 int main()
 {
-	img = imread("0.png");
-	Mat gray;
-	cvtColor(img, gray, CV_RGB2GRAY);
-	//		namedWindow("Canny", 1);
-	//		createTrackbar( "low: ", "Canny", &cannyMin, canny, on_trackbar );
-	//		createTrackbar( "high: ", "Canny", &cannyMax, canny, on_trackbar );
-	//		on_trackbar( canny, 0 );
+	img = imread("cut0.png");
 
-	//	HoughLineDetection(img, 195, 350);
-	//	//HoughLineDetectionPrbabilistic(img, 195, 350);
+	img.copyTo(dd);
+	cvtColor(img, gray, CV_RGB2GRAY);
+	//								namedWindow("Canny", 1);
+	//								createTrackbar( "low: ", "Canny", &cannyMin, canny, on_trackbar );
+	//								createTrackbar( "high: ", "Canny", &cannyMax, canny, on_trackbar );
+	//								on_trackbar( canny, 0 );
 
 	//get the edges
+	//	blur(gray, gray, Size(3, 3), Point(0,0), 0);
+
+
 	Mat edges;
-	Canny(gray, edges, 700, 550, 5);
-	imshow("canny", edges);
+	Canny(gray, edges, 74, 22, 3);
+
+	//	imshow("canny", edges);
+	//	waitKey(0);
 
 	std::vector<cv::Vec4i> lines;
-	cv::HoughLinesP(edges, lines, 1, CV_PI/360, 20, 70, 10);
+	vector<Vec2f> s_lines;
+	//	cv::HoughLinesP(edges, lines, 1, CV_PI/180, 20, 10, 10);
+	HoughLines( edges, s_lines, 1, CV_PI/180, 30);
+
+	//	for( size_t i = 0; i < s_lines.size(); i++ )
+	//	{
+	//		float r = s_lines[i][0], t = s_lines[i][1];
+	//		double cos_t = cos(t), sin_t = sin(t);
+	//		double x0 = r*cos_t, y0 = r*sin_t;
+	//		double alpha = 1000;
+	//
+	//		Point pt1( cvRound(x0 + alpha*(-sin_t)), cvRound(y0 + alpha*cos_t) );
+	//		Point pt2( cvRound(x0 - alpha*(-sin_t)), cvRound(y0 - alpha*cos_t) );
+	//		line( dd, pt1, pt2, Scalar(255,0,0), 1);
+	//		cout << "rho: " << r << ", theta: " << t << endl;
+	//		imshow("", dd);
+	//		waitKey(0);
+	//	}
+
 
 	//vizualize found lines
-	for( size_t i = 0; i < lines.size(); i++ )
-	{
-		Vec4i l = lines[i];
-		line( img, Point(l[0], l[1]), Point(l[2], l[3]), Scalar(0,0,255), 2);
-	}
-	cout << "line size: " << lines .size() << endl;
+	//	for( size_t i = 0; i < lines.size(); i++ )
+	//	{
+	//		Vec4i l = lines[i];
+	//		float length = sqrt((l[2] - l[0]) * (l[2] - l[0]) + (l[3] - l[1])*(l[3] - l[1]));
+	//		if (length > 30)
+	//			line( dd, Point(l[0], l[1]), Point(l[2], l[3]), Scalar(0,0,255), 2);
+	//	}
+	//	cout << "line size: " << lines .size() << endl;
 
-	imshow("img", img);
+	//	imshow("visualize lines", dd);
 
-	std::vector<cv::Point2f> corners;
-	for (int i = 0; i < lines.size(); i++)
-	{
-		for (int j = i+1; j < lines.size(); j++)
-		{
-			cv::Point2f pt = computeIntersect(lines[i], lines[j]);
-			if (pt.x >= 0 && pt.y >= 0) corners.push_back(pt);
-		}
-	}
-	cout << "amount of corners: " << corners.size()<< endl;
 
-	vector<Point2f> newCorners = removeUselessCorners(corners, 30, 45);
-	cout << "amount of new corners: " << newCorners.size()<< endl;
-	//	drawCorners(img, corners);
-	//
-	//	// Get mass center
-	//	Point2f center(0,0);
-	//	for (int i = 0; i < corners.size(); i++)
-	//		center += corners[i];
-	//	center *= (1. / corners.size());
-	//
-	//	circle(img, center, 3, CV_RGB(255,255,255), 2);
-	//	imshow("center", img);
+	detectRectanglePatterns(s_lines, 0.02, 0.02, 0.5);
+
+
 	waitKey(0);
 	return 0;
 }
 
-vector<Point2f> removeUselessCorners(vector<Point2f> corners, int sizeOfCornerMin, int sizeOfCornerMax)
-						{
-	vector<Point2f> dst;
-	for (int i = 0; i < corners.size(); i++)
-	{
-		bool add = false;
-		Point2f current_corner = corners[i];
-		for (int j = 0; j < corners.size(); j++)
-		{
-			if (j != i)
-			{
-				if (abs(current_corner.x - corners[j].x) <= sizeOfCornerMax &&
-						abs(current_corner.x - corners[j].x) > sizeOfCornerMin &&
-						abs(current_corner.y - corners[j].y) <= sizeOfCornerMax &&
-						abs(current_corner.y - corners[j].y) > sizeOfCornerMin)
-				{
-					add = true;
-					break;
-				}
-			}
+class MyLine{
+public:
 
-		}
-		if (add) dst.push_back(current_corner);
+	int name;
+	float rho = 0.0f;
+	float theta = 0.0f;
+
+	vector<int> parallelLines;
+	vector<int> perpendicularLines;
+
+	Scalar getColor() {
+		return CV_RGB(rand() % 256, rand() % 256, rand() % 256);
 	}
-	return dst;
-						}
+};
 
-void drawCorners(Mat dst, vector<Point2f> corners)
+
+MyLine getLineParameters(float rho, float theta, int num)
 {
-	circle(dst, corners[0], 3, CV_RGB(255,0,0), 2);
-	circle(dst, corners[1], 3, CV_RGB(0,255,0), 2);
-	circle(dst, corners[2], 3, CV_RGB(0,0,255), 2);
-	circle(dst, corners[3], 3, CV_RGB(0,0,0), 2);
-	imshow("corners", dst);
+	MyLine _line;
+
+	_line.rho = rho;
+	_line.theta = theta;
+
+	_line.name = num;
+
+	return _line;
 }
 
-vector<Vec4i> findParallelLines(std::vector<cv::Vec4i> lines, int max, int min)
-				{
-	vector<Vec4i> dst;
+
+
+//-------------------------------------------------------------------
+vector<Vec2f> detectRectanglePatterns(std::vector<cv::Vec2f> lines, double Tq, double Tp, double Tl){
+	vector<Vec2f> dst;
+
+	//store each line values
+	vector<MyLine> linearray;
 	for( size_t i = 0; i < lines.size(); i++ )
 	{
-		//transfer to Cartesian coordinates
-		float rho = lines[i][0], theta = lines[i][1];
-		Point pt1, pt2;
-		double a = cos(theta), b = sin(theta);
-		double x0 = a*rho, y0 = b*rho;
-		pt1.x = cvRound(x0 + 1000*(-b)); //the first point
-		pt1.y = cvRound(y0 + 1000*(a)); //the first point
-		pt2.x = cvRound(x0 - 1000*(-b)); //the second point
-		pt2.y = cvRound(y0 - 1000*(a)); //the second point
-		cout << "x1: " << pt1.x;
-		bool found = false;
-		//find second point
+		MyLine ll = getLineParameters(lines[i][0], lines[i][1], i);
+		linearray.push_back(ll);
+	}
+
+	int pair = 1;
+	for( size_t i = 0; i < lines.size(); i++ )
+	{
+		MyLine* firstLine = &linearray[i];
+		//find pair
 		for( size_t j = 0; j < lines.size(); j++ )
 		{
 			if (i != j)
 			{
-				float rho = lines[i][0], theta = lines[i][1];
-				Point pt1, pt2;
-				double a = cos(theta), b = sin(theta);
-				double x0 = a*rho, y0 = b*rho;
-				pt1.x = cvRound(x0 + 1000*(-b)); //the first point
-				pt1.y = cvRound(y0 + 1000*(a)); //the first point
-				pt2.x = cvRound(x0 - 1000*(-b)); //the second point
-				pt2.y = cvRound(y0 - 1000*(a)); //the second point
+				MyLine* secondLine = &linearray[j];
+
+				//check 3 equations
+
+				if ( abs(firstLine-> theta - secondLine-> theta) < Tq)
+				{
+					//						cout << "m: " << firstLine->theta  << " second m: " << secondLine->theta<< ", name: "<< firstLine->name <<", is parallel to " << secondLine->name<< ", "<<endl;
+					firstLine->parallelLines.push_back(j);
+				}
+				else if (abs(firstLine->theta - secondLine->theta) > 1.56 || abs(firstLine->theta - secondLine->theta) < 1.6)
+				{
+					firstLine->perpendicularLines.push_back(j);
+				}
 			}
+		}
+
+		Scalar color = firstLine->getColor();
+
+		if (firstLine->parallelLines.size() > 1 &&
+				firstLine->perpendicularLines.size() > 1)
+		{
+			cout << "line: " << firstLine->name <<" par: " << firstLine->parallelLines.size() << ", perp: " << firstLine->perpendicularLines.size() << endl;
+			//draw lines here
+			for (int u = 0;u < firstLine->parallelLines.size(); u ++){
+				int number = firstLine->parallelLines[u];
+
+				MyLine _tmp = getLineParameters(lines[number][0], lines[number][1], number);
+				Vec2f l = lines[firstLine->parallelLines[u]];
+
+				float r = firstLine->rho, t = firstLine->theta;
+				double cos_t = cos(t), sin_t = sin(t);
+				double x0 = r*cos_t, y0 = r*sin_t;
+				double alpha = 1000;
+
+				Point pt1( cvRound(x0 + alpha*(-sin_t)), cvRound(y0 + alpha*cos_t) );
+				Point pt2( cvRound(x0 - alpha*(-sin_t)), cvRound(y0 - alpha*cos_t) );
+				line( img, pt1, pt2, color, 1);
+
+				int fontFace = FONT_HERSHEY_SCRIPT_SIMPLEX;
+				double fontScale = 0.5;
+				int thickness = 1;
+				std::ostringstream lineNo1, lineNo2;
+				lineNo1 << pair << " - " << _tmp.name;
+				cv::putText(img, lineNo1.str(), Point(l[0], l[1]), fontFace, fontScale, Scalar::all(255), thickness, 8);
+			}
+
+			for (int u = 0;u < firstLine->perpendicularLines.size(); u ++){
+				int number = firstLine->perpendicularLines[u];
+
+				MyLine _tmp = getLineParameters(lines[number][0], lines[number][1], number);
+				Vec2f l = lines[firstLine->perpendicularLines[u]];
+
+				float r = firstLine->rho, t = firstLine->theta;
+				double cos_t = cos(t), sin_t = sin(t);
+				double x0 = r*cos_t, y0 = r*sin_t;
+				double alpha = 100;
+
+				Point pt1( cvRound(x0 + alpha*(-sin_t)), cvRound(y0 + alpha*cos_t) );
+				Point pt2( cvRound(x0 - alpha*(-sin_t)), cvRound(y0 - alpha*cos_t) );
+				line( img, pt1, pt2, color, 1);
+
+				int fontFace = FONT_HERSHEY_SCRIPT_SIMPLEX;
+				double fontScale = 0.5;
+				int thickness = 1;
+				std::ostringstream lineNo1, lineNo2;
+				lineNo1 << pair << " - " << _tmp.name;
+				cv::putText(img, lineNo1.str(), Point(l[0], l[1]), fontFace, fontScale, Scalar::all(255), thickness, 8);
+			}
+			imshow("pair", img);
+			waitKey();
+			pair++;
 		}
 	}
 
 	return dst;
-				}
+}
+//************************************************
+
+
 
 void on_trackbar( int, void* )
 {
-	Canny(img, contours, cannyMin, cannyMax);
+	Canny(gray, contours, cannyMin, cannyMax, 3);
 	imshow("Canny", contours);
 }
